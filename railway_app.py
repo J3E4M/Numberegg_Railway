@@ -163,32 +163,32 @@ async def detect_eggs(
                     height = y2 - y1
                     area = width * height
                     
-                    # Classify egg size into 6 grades (approx. by bbox area)
+                    # Classify egg size into 6 grades (NEW SYSTEM - grade0-5)
                     # TODO: calibrate with real-world scale
                     if area >= 22000:
-                        egg_grade = "grade0"
+                        egg_grade = "grade0"  # เบอร์ 0 (พิเศษ)
                         grade0_count += 1
                     elif area >= 20000:
-                        egg_grade = "grade1"
+                        egg_grade = "grade1"  # เบอร์ 1 (ใหญ่)
                         grade1_count += 1
                     elif area >= 18000:
-                        egg_grade = "grade2"
+                        egg_grade = "grade2"  # เบอร์ 2 (กลาง)
                         grade2_count += 1
                     elif area >= 16000:
-                        egg_grade = "grade3"
+                        egg_grade = "grade3"  # เบอร์ 3 (เล็ก)
                         grade3_count += 1
                     elif area >= 14000:
-                        egg_grade = "grade4"
+                        egg_grade = "grade4"  # เบอร์ 4 (เล็กมาก)
                         grade4_count += 1
                     else:
-                        egg_grade = "grade5"
+                        egg_grade = "grade5"  # เบอร์ 5 (พิเศษเล็ก)
                         grade5_count += 1
                     
                     egg_count += 1
                     
                     detection = {
                         "id": len(detections) + 1,
-                        "grade": egg_grade,
+                        "grade": egg_grade,  # NEW: grade0-5 strings
                         "confidence": round(confidence, 3),
                         "bbox": {
                             "x1": round(float(x1), 2),

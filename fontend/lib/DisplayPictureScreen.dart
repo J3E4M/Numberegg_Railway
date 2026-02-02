@@ -114,20 +114,31 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
         for (final detection in widget.detections!) {
           if (detection.confidence < 0.3) continue; // กรอง confidence ต่ำ
           
-          // แปลง grade string เป็นตัวเลข
+          // แปลง grade string เป็นตัวเลข (NEW SYSTEM - grade0-5 เท่านั้น)
           int grade;
           switch (detection.grade.toLowerCase()) {
-            case 'big':
-              grade = 3;
+            // New system (จาก Railway ใหม่)
+            case 'grade0':
+              grade = 0;  // เบอร์ 0 (พิเศษ)
               break;
-            case 'medium':
-              grade = 2;
+            case 'grade1':
+              grade = 1;  // เบอร์ 1 (ใหญ่)
               break;
-            case 'small':
-              grade = 1;
+            case 'grade2':
+              grade = 2;  // เบอร์ 2 (กลาง)
               break;
+            case 'grade3':
+              grade = 3;  // เบอร์ 3 (เล็ก)
+              break;
+            case 'grade4':
+              grade = 4;  // เบอร์ 4 (เล็กมาก)
+              break;
+            case 'grade5':
+              grade = 5;  // เบอร์ 5 (พิเศษเล็ก)
+              break;
+            
             default:
-              grade = 1;
+              grade = 2;  // default เป็นกลาง
           }
           
           eggItems.add({
@@ -184,7 +195,7 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("บันทึกประวัติเรียบร้อยแล้ว! (เฉพาะ SQLite)"),
+              content: Text("บันทึกประวัติเรียบร้อยแล้ว!"),
               backgroundColor: Colors.green,
             ),
           );
