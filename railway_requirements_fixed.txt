@@ -1,12 +1,12 @@
-# Railway requirements - optimized for Python 3.9
+# Railway requirements - MINIMAL SIZE (< 4GB)
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
 pillow==10.1.0
-torch==2.0.1
-torchvision==0.15.2
+torch==2.0.1+cpu
+torchvision==0.15.2+cpu
 ultralytics==8.0.206
-opencv-python==4.8.1.78
+opencv-python-headless==4.8.1.78
 numpy==1.24.3
 python-dotenv==1.0.0
 requests==2.31.0
