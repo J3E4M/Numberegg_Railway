@@ -112,7 +112,8 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
       // ใช้ข้อมูลจากการ detect จริงเท่านั้น
       if (widget.detections != null && widget.detections!.isNotEmpty) {
         for (final detection in widget.detections!) {
-          if (detection.confidence < 0.3) continue; // กรอง confidence ต่ำ
+          // ตรวจสอบว่า confidence ไม่เป็น null ก่อน
+          if (detection.confidence == null || detection.confidence! < 0.3) continue; // กรอง confidence ต่ำ
           
           // ตรวจสอบว่า grade ไม่เป็น null
           if (detection.grade == null) continue;
@@ -174,23 +175,27 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
           imagePath: widget.imagePath ?? 'display_image',
           eggCount: eggItems.length,
           successPercent: eggItems.isEmpty ? 0 : 
-            (eggItems.map((e) => e['confidence'] as double).reduce((a, b) => a + b) / eggItems.length),
-          grade0Count: eggItems.where((e) => e['grade'] == 0).length,
-          grade1Count: eggItems.where((e) => e['grade'] == 1).length,
-          grade2Count: eggItems.where((e) => e['grade'] == 2).length,
-          grade3Count: eggItems.where((e) => e['grade'] == 3).length,
-          grade4Count: eggItems.where((e) => e['grade'] == 4).length,
-          grade5Count: eggItems.where((e) => e['grade'] == 5).length,
+            (eggItems.where((e) => e != null && e['confidence'] != null)
+             .map((e) => e['confidence'] as double)
+             .reduce((a, b) => a + b) / eggItems.length),
+          grade0Count: eggItems.where((e) => e != null && e['grade'] == 0).length,
+          grade1Count: eggItems.where((e) => e != null && e['grade'] == 1).length,
+          grade2Count: eggItems.where((e) => e != null && e['grade'] == 2).length,
+          grade3Count: eggItems.where((e) => e != null && e['grade'] == 3).length,
+          grade4Count: eggItems.where((e) => e != null && e['grade'] == 4).length,
+          grade5Count: eggItems.where((e) => e != null && e['grade'] == 5).length,
           day: DateTime.now().toString().substring(0, 10),
         );
         
         // บันทึกรายการไข่แต่ละอันลง SQLite
         for (final item in eggItems) {
-          await EggDatabase.instance.insertEggItem(
-            sessionId: sessionId,
-            grade: item['grade'] as int,
-            confidence: item['confidence'] as double,
-          );
+          if (item != null && item['grade'] != null && item['confidence'] != null) {
+            await EggDatabase.instance.insertEggItem(
+              sessionId: sessionId,
+              grade: item['grade'] as int,
+              confidence: item['confidence'] as double,
+            );
+          }
         }
         
         debugPrint("✅ Save to SQLite สำเร็จ - Session ID: $sessionId");
