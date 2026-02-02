@@ -1,41 +1,52 @@
-# ONNX YOLO - < 400MB (Optimized)
+# ONNX YOLO - < 400MB
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# ✅ Minimal dependencies
+# Install system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# ✅ Install Python packages (opencv-headless)
+# Install opencv-headless SEPARATELY
+RUN pip install --no-cache-dir opencv-python-headless==4.8.1.78
+
+# Install base packages
 RUN pip install --no-cache-dir \
-    fastapi==0.104.1 \
-    uvicorn==0.24.0 \
-    onnxruntime==1.16.3 \
     numpy==1.24.4 \
-    pillow==10.0.0 \
-    opencv-python-headless==4.8.1.78 \
+    pillow==10.0.0
+
+# Install ML packages
+RUN pip install --no-cache-dir \
+    onnxruntime==1.16.3 \
     ultralytics==8.0.196
 
-# Copy app
+# Install web framework
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn==0.24.0
+
+# Copy application
 COPY railway_app_real.py .
 
-# ✅ Download and convert (with proper environment)
-RUN wget -O yolov8n.pt https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt
-
-# ✅ Convert with environment variables
+# Set headless environment
 ENV DISPLAY=
 ENV QT_QPA_PLATFORM=offscreen
+ENV MPLBACKEND=Agg
 
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsz=640)" && \
-    rm yolov8n.pt
+# Download YOLO model
+RUN wget -q -O yolov8n.pt https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt
 
-# Create uploads
-RUN mkdir -p /app/uploads
+# Convert to ONNX
+RUN python -c "from ultralytics import YOLO; model = YOLO('yolov8n.pt'); model.export(format='onnx', imgsz=640)"
 
 # Clean up
-RUN rm -rf /root/.cache/pip
+RUN rm yolov8n.pt && \
+    rm -rf /root/.cache/pip
+
+# Create uploads directory
+RUN mkdir -p /app/uploads
 
 EXPOSE 8000
 CMD ["python", "railway_app_real.py"]
