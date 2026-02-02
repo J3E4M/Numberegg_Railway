@@ -1,45 +1,22 @@
-# ULTRA MINIMAL YOLO Detection - < 3GB
-FROM python:3.9-slim
+# Ultra minimal - no AI, just API
+FROM python:3.9-alpine
 
 WORKDIR /app
 
-# Install minimal system dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    libglvnd0 \
-    libglx-mesa0 \
-    libgl1-mesa-dev \
-    libegl1-mesa0 \
-    libgbm1 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# Install minimal dependencies
+RUN apk add --no-cache wget curl
 
-# Copy requirements first for better caching
-COPY railway_requirements_fixed.txt requirements.txt
+# Copy requirements (minimal)
+COPY railway_requirements_minimal.txt requirements.txt
 
-# Install PyTorch CPU-only first (smaller)
-RUN pip install --no-cache-dir \
-    torch==1.13.1+cpu \
-    torchvision==0.14.1+cpu \
-    --index-url https://download.pytorch.org/whl/cpu
-
-# Install other packages
+# Install Python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app
-COPY railway_app.py .
+COPY railway_app_simple.py .
 
 # Create uploads
 RUN mkdir -p /app/uploads
 
-# Remove unnecessary files to reduce size
-RUN find /usr/local/lib/python3.9 -name "*.pyc" -delete
-RUN find /usr/local/lib/python3.9 -name "__pycache__" -type d -exec rm -rf {} +
-RUN rm -rf /root/.cache/pip
-
 EXPOSE 8000
-CMD ["python", "railway_app.py"]
+CMD ["python", "railway_app_simple.py"]
