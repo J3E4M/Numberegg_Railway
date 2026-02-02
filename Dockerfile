@@ -20,7 +20,7 @@ COPY railway_requirements_custom.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy real app and detector
-COPY railway_app_real.py .
+COPY railway_app_real.py railway_app.py .
 COPY egg_detector_real.py .
 
 # Create uploads
