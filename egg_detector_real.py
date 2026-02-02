@@ -32,11 +32,11 @@ class RealEggDetector:
         
         # Egg detection parameters - more lenient for better detection
         self.min_area = 500           # พื้นที่น้อยสุด (noise) - reduced from 3000
-        self.max_area = 100000        # พื้นที่มากสุด (ไม่ใช่ไข่) - increased from 60000
+        self.max_area = 500000        # พื้นที่มากสุด (ไม่ใช่ไข่) - increased significantly
         self.min_aspect = 0.3         # aspect ratio น้อยสุด (รีเกินไป) - reduced from 0.6
         self.max_aspect = 3.0         # aspect ratio มากสุด (กลมเกินไป) - increased from 1.8
-        self.min_circularity = 0.2    # ความกลมน้อยสุด - reduced from 0.4
-        self.min_confidence = 0.2     # confidence น้อยสุด - reduced from 0.3
+        self.min_circularity = 0.1    # ความกลมน้อยสุด - reduced from 0.2
+        self.min_confidence = 0.1     # confidence น้อยสุด - reduced from 0.2
         
         logger.info("✅ Real Egg Detector initialized successfully!")
     
@@ -66,7 +66,7 @@ class RealEggDetector:
         """Detect edges using multiple methods"""
         try:
             # Method 1: Canny edge detection with lower thresholds for better sensitivity
-            edges_canny = cv2.Canny(gray_image, 30, 100)  # Reduced from 50, 150
+            edges_canny = cv2.Canny(gray_image, 20, 80)  # Further reduced thresholds
             
             # Method 2: Sobel edge detection
             sobel_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)
@@ -76,17 +76,25 @@ class RealEggDetector:
             
             # Method 3: Adaptive threshold for better edge detection in varying lighting
             adaptive_thresh = cv2.adaptiveThreshold(
-                gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+                gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 9, 3
             )
             
             # Combine all methods
             combined_edges = cv2.bitwise_or(edges_canny, sobel_magnitude)
             combined_edges = cv2.bitwise_or(combined_edges, adaptive_thresh)
             
-            # Morphological operations to close gaps
-            kernel = np.ones((3,3), np.uint8)
-            combined_edges = cv2.morphologyEx(combined_edges, cv2.MORPH_CLOSE, kernel)
-            combined_edges = cv2.morphologyEx(combined_edges, cv2.MORPH_DILATE, kernel)
+            # Morphological operations to close gaps but avoid merging objects
+            kernel_small = np.ones((2,2), np.uint8)
+            combined_edges = cv2.morphologyEx(combined_edges, cv2.MORPH_CLOSE, kernel_small)
+            combined_edges = cv2.morphologyEx(combined_edges, cv2.MORPH_DILATE, kernel_small)
+            
+            # Remove border edges to avoid detecting the entire image frame
+            height, width = combined_edges.shape
+            border_size = 10
+            combined_edges[:border_size, :] = 0
+            combined_edges[-border_size:, :] = 0
+            combined_edges[:, :border_size] = 0
+            combined_edges[:, -border_size:] = 0
             
             return combined_edges
             
@@ -109,32 +117,47 @@ class RealEggDetector:
                 # Calculate contour properties
                 area = cv2.contourArea(contour)
                 
+                logger.info(f"🔍 Contour {i+1}: area={area:.0f}")
+                
                 # Skip if too small or too large
                 if area < self.min_area or area > self.max_area:
+                    logger.info(f"❌ Rejected contour {i+1}: area {area:.0f} not in range [{self.min_area}, {self.max_area}]")
                     continue
                 
                 # Get bounding box
                 x, y, w, h = cv2.boundingRect(contour)
                 aspect_ratio = w / h
                 
+                logger.info(f"🔍 Contour {i+1}: aspect_ratio={aspect_ratio:.2f}")
+                
                 # Skip if not egg-shaped (eggs are typically oval) - more lenient now
                 if aspect_ratio < self.min_aspect or aspect_ratio > self.max_aspect:
+                    logger.info(f"❌ Rejected contour {i+1}: aspect_ratio {aspect_ratio:.2f} not in range [{self.min_aspect}, {self.max_aspect}]")
                     continue
                 
                 # Calculate circularity (4π*Area/Perimeter²)
                 perimeter = cv2.arcLength(contour, True)
                 if perimeter > 0:
                     circularity = (4 * math.pi * area) / (perimeter * perimeter)
+                    logger.info(f"🔍 Contour {i+1}: circularity={circularity:.2f}")
+                    
                     if circularity < self.min_circularity:
+                        logger.info(f"❌ Rejected contour {i+1}: circularity {circularity:.2f} < {self.min_circularity}")
                         continue
+                else:
+                    logger.info(f"❌ Rejected contour {i+1}: perimeter is 0")
+                    continue
                 
                 # Additional check: contour should be reasonably smooth - more lenient
                 approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+                logger.info(f"🔍 Contour {i+1}: approx_points={len(approx)}")
+                
                 if len(approx) < 6 or len(approx) > 30:  # Relaxed from 8-20 to 6-30
+                    logger.info(f"❌ Rejected contour {i+1}: approx_points {len(approx)} not in range [6, 30]")
                     continue
                 
                 egg_contours.append(contour)
-                logger.info(f"✅ Contour {i+1}: area={area:.0f}, aspect={aspect_ratio:.2f}, circularity={circularity:.2f}")
+                logger.info(f"✅ Accepted contour {i+1}: area={area:.0f}, aspect={aspect_ratio:.2f}, circularity={circularity:.2f}")
             
             logger.info(f"🔍 Found {len(egg_contours)} egg-like contours from {len(contours)} total contours")
             return egg_contours

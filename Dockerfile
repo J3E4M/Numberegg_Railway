@@ -3,25 +3,27 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies for OpenCV
+# Install system dependencies for OpenCV + tools for model download
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libgomp1 \
+    wget \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy real requirements
-COPY railway_requirements_custom.txt requirements.txt
-
-# Install Python packages (real OpenCV version)
+# Install YOLO backend requirements
+COPY backend/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy real app and detector
-COPY railway_app_real.py railway_app.py .
-COPY egg_detector_real.py .
+# Copy Railway app
+COPY railway_app_real.py .
+
+# Download YOLO weights
+RUN wget -O yolov8n.pt https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt
 
 # Create uploads
 RUN mkdir -p /app/uploads

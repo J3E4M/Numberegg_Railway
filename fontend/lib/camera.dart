@@ -311,15 +311,20 @@ class _SelectImageScreenState extends State<SelectImageScreen> {
     final height = cameraImage.height;
     
     try {
-      // Create proper RGBA buffer from YUV420
-      final bytes = Uint8List(width * height * 4);
+      // Create a simple canvas-based approach
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      
+      // Create a simple representation by drawing pixels
       final yPlane = cameraImage.planes[0];
       final uPlane = cameraImage.planes[1];
       final vPlane = cameraImage.planes[2];
       
-      // More robust YUV to RGB conversion
-      for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
+      // Sample the image at lower resolution for performance
+      final sampleRate = 4; // Process every 4th pixel
+      
+      for (int y = 0; y < height; y += sampleRate) {
+        for (int x = 0; x < width; x += sampleRate) {
           final yIndex = y * yPlane.bytesPerRow + x;
           final uvIndex = (y ~/ 2) * uPlane.bytesPerRow + (x ~/ 2);
           
@@ -327,67 +332,43 @@ class _SelectImageScreenState extends State<SelectImageScreen> {
           final uValue = uPlane.bytes[uvIndex];
           final vValue = vPlane.bytes[uvIndex];
           
-          // YUV to RGB conversion with proper bounds checking
+          // YUV to RGB conversion
           double r = yValue + 1.402 * (vValue - 128);
           double g = yValue - 0.344 * (uValue - 128) - 0.714 * (vValue - 128);
           double b = yValue + 1.772 * (uValue - 128);
           
-          // Clamp values to valid range
+          // Clamp values
           r = r.clamp(0.0, 255.0);
           g = g.clamp(0.0, 255.0);
           b = b.clamp(0.0, 255.0);
           
-          final pixelIndex = (y * width + x) * 4;
-          bytes[pixelIndex] = r.round();     // R
-          bytes[pixelIndex + 1] = g.round(); // G
-          bytes[pixelIndex + 2] = b.round(); // B
-          bytes[pixelIndex + 3] = 255;       // A
+          // Draw a small rectangle for each sampled pixel
+          final paint = Paint()
+            ..color = Color.fromARGB(255, r.round(), g.round(), b.round());
+          
+          canvas.drawRect(
+            Rect.fromLTWH(x.toDouble(), y.toDouble(), sampleRate.toDouble(), sampleRate.toDouble()),
+            paint,
+          );
         }
       }
       
-      // Validate bytes before decode
-      if (bytes.isEmpty || bytes.length < 100) {
-        throw Exception("Invalid image data: too small or empty");
-      }
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(width, height);
+      return image;
       
-      // Check for common image headers
-      final hasValidHeader = (bytes.length >= 4) &&
-          ((bytes[0] == 0xFF && bytes[1] == 0xD8) || // JPEG
-           (bytes[0] == 0x89 && bytes[1] == 0x50) || // PNG
-           (bytes[0] == 0x42 && bytes[1] == 0x4D));   // BMP
-      
-      if (!hasValidHeader) {
-        throw Exception("Invalid image data: no valid image header found");
-      }
-      
-      // Create bitmap with proper format
-      final codec = await ui.instantiateImageCodec(
-        bytes,
-        targetWidth: width,
-        targetHeight: height,
-      );
-      
-      final frame = await codec.getNextFrame();
-      return frame.image;
     } catch (e) {
       debugPrint("YUV conversion error: $e");
       // Create a simple fallback image
-      final bytes = Uint8List(width * height * 4);
-      for (int i = 0; i < bytes.length; i += 4) {
-        bytes[i] = 200;     // R (light gray)
-        bytes[i + 1] = 200; // G
-        bytes[i + 2] = 200; // B
-        bytes[i + 3] = 255; // A
-      }
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
       
-      final codec = await ui.instantiateImageCodec(
-        bytes,
-        targetWidth: width,
-        targetHeight: height,
-      );
+      final paint = Paint()..color = Colors.grey;
+      canvas.drawRect(Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()), paint);
       
-      final frame = await codec.getNextFrame();
-      return frame.image;
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(width, height);
+      return image;
     }
   }
 

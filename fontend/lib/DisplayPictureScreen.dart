@@ -34,6 +34,32 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
   bool isSaved = false;
   bool isLocalSaved = false;
 
+  Future<String> _ensureLocalImagePath() async {
+    try {
+      final currentPath = widget.imagePath;
+      if (currentPath.isNotEmpty && !currentPath.startsWith('http')) {
+        final f = File(currentPath);
+        if (f.existsSync()) {
+          return currentPath;
+        }
+      }
+
+      if (widget.imageBytes == null || widget.imageBytes!.isEmpty) {
+        return widget.imagePath;
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final fileName = "Egg_${DateTime.now().millisecondsSinceEpoch}.jpg";
+      final filePath = "${dir.path}/$fileName";
+      final outFile = File(filePath);
+      await outFile.writeAsBytes(widget.imageBytes!, flush: true);
+      return filePath;
+    } catch (e) {
+      debugPrint("❌ _ensureLocalImagePath error: $e");
+      return widget.imagePath;
+    }
+  }
+
   Future<void> saveImageToGallery() async {
     setState(() { isSaving = true; });
     try {
@@ -172,10 +198,13 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
       try {
         debugPrint("🗄️ Starting SQLite save process...");
         debugPrint("📊 Total egg items to save: ${eggItems.length}");
+
+        final savedLocalImagePath = await _ensureLocalImagePath();
+        debugPrint("🖼️ Saved local image path: $savedLocalImagePath");
         
         final sessionId = await EggDatabase.instance.insertSession(
           userId: userId,
-          imagePath: widget.imagePath ?? 'display_image',
+          imagePath: (savedLocalImagePath.isNotEmpty ? savedLocalImagePath : 'display_image'),
           eggCount: eggItems.length,
           successPercent: eggItems.isEmpty ? 0 : 
             (eggItems.where((e) => e != null && e['confidence'] != null)
@@ -207,6 +236,32 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
         }
         
         debugPrint("✅ Total egg items saved to SQLite: $itemsSaved");
+
+        // Sync to Supabase (best-effort)
+        try {
+          await SupabaseService.createEggSessionWithItems(
+            userId: userId,
+            imagePath: savedLocalImagePath,
+            eggCount: eggItems.length,
+            successPercent: eggItems.isEmpty ? 0 :
+                (eggItems
+                        .where((e) => e != null && e['confidence'] != null)
+                        .map((e) => e['confidence'] as double)
+                        .reduce((a, b) => a + b) /
+                    eggItems.length),
+            grade0Count: eggItems.where((e) => e != null && e['grade'] == 0).length,
+            grade1Count: eggItems.where((e) => e != null && e['grade'] == 1).length,
+            grade2Count: eggItems.where((e) => e != null && e['grade'] == 2).length,
+            grade3Count: eggItems.where((e) => e != null && e['grade'] == 3).length,
+            grade4Count: eggItems.where((e) => e != null && e['grade'] == 4).length,
+            grade5Count: eggItems.where((e) => e != null && e['grade'] == 5).length,
+            day: DateTime.now().toString().substring(0, 10),
+            eggItems: eggItems,
+          );
+          debugPrint("✅ Synced to Supabase successfully");
+        } catch (supabaseError) {
+          debugPrint("⚠️ Supabase sync failed (ignored): $supabaseError");
+        }
         
         // ตรวจสอบข้อมูลที่บันทึก
         await _verifySQLiteData(sessionId);
@@ -564,19 +619,34 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
     IconData gradeIcon;
     
     switch (detection.grade.toLowerCase()) {
-      case 'big':
+      case 'grade0':
         gradeText = "เบอร์ 0 (พิเศษ)";
         gradeColor = Colors.red;
         gradeIcon = Icons.egg;
         break;
-      case 'medium':
+      case 'grade1':
         gradeText = "เบอร์ 1 (ใหญ่)";
         gradeColor = Colors.orange;
+        gradeIcon = Icons.egg;
+        break;
+      case 'grade2':
+        gradeText = "เบอร์ 2 (กลาง)";
+        gradeColor = Colors.amber;
         gradeIcon = Icons.egg_alt;
         break;
-      case 'small':
-        gradeText = "เบอร์ 2 (กลาง)";
-        gradeColor = Colors.yellow;
+      case 'grade3':
+        gradeText = "เบอร์ 3 (เล็ก)";
+        gradeColor = Colors.green;
+        gradeIcon = Icons.egg_outlined;
+        break;
+      case 'grade4':
+        gradeText = "เบอร์ 4 (เล็กมาก)";
+        gradeColor = Colors.blueGrey;
+        gradeIcon = Icons.egg_outlined;
+        break;
+      case 'grade5':
+        gradeText = "เบอร์ 5 (พิเศษเล็ก)";
+        gradeColor = Colors.grey;
         gradeIcon = Icons.egg_outlined;
         break;
       default:

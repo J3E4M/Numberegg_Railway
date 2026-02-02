@@ -20,19 +20,71 @@ import uuid
 import shutil
 from pathlib import Path
 from contextlib import asynccontextmanager
+from ultralytics import YOLO
+import numpy as np
+import cv2
+import re
 
 # Import our real egg detector
-from egg_detector_real import RealEggDetector
+# from egg_detector_real import RealEggDetector
+
+def _load_yolo_model() -> YOLO:
+    env_model_path = os.getenv("YOLO_MODEL_PATH", "").strip()
+    candidates = [
+        Path(env_model_path) if env_model_path else None,
+        Path("backend") / "yolov8n.pt",
+        Path("yolov8n.pt"),
+    ]
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return YOLO(str(candidate))
+    raise RuntimeError("YOLO model file not found. Set YOLO_MODEL_PATH or provide yolov8n.pt")
+
+def _safe_float(value) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return 0.0
+
+def _normalize_class_name(name: str) -> str:
+    return (name or "").strip().lower().replace("-", "_").replace(" ", "")
+
+def _grade_from_class_name(class_name: str) -> Optional[str]:
+    n = _normalize_class_name(class_name)
+    m = re.search(r"(grade|no\.?)([0-5])", n)
+    if m:
+        return f"grade{m.group(2)}"
+    if n in {"egg_small", "small", "eggs"}:
+        return "grade4"
+    if n in {"egg_medium", "medium"}:
+        return "grade2"
+    if n in {"egg_large", "large"}:
+        return "grade1"
+    return None
+
+def _grade_from_bbox_ratio(bbox_area: float, image_area: float) -> str:
+    ratio = (bbox_area / image_area) if image_area > 0 else 0.0
+    if ratio >= 0.12:
+        return "grade0"
+    if ratio >= 0.09:
+        return "grade1"
+    if ratio >= 0.06:
+        return "grade2"
+    if ratio >= 0.04:
+        return "grade3"
+    if ratio >= 0.02:
+        return "grade4"
+    return "grade5"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     try:
-        global egg_detector
-        egg_detector = RealEggDetector()
+        global yolo_model
+        yolo_model = _load_yolo_model()
         init_sqlite()
         init_supabase()
-        print("✅ Real Egg Detector initialized successfully")
+        print("✅ YOLO model initialized successfully")
         print("✅ SQLite initialized successfully")
         print("✅ Supabase connected successfully")
     except Exception as e:
@@ -52,8 +104,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 # Initialize Supabase client
 supabase: Optional[Client] = None
 
-# Initialize egg detector
-egg_detector: Optional[RealEggDetector] = None
+# Initialize YOLO model
+yolo_model: Optional[YOLO] = None
 
 # Create uploads directory
 UPLOAD_DIR = Path("uploads")
@@ -144,7 +196,7 @@ async def root():
     return {
         "message": "NumberEgg Real API is running", 
         "version": "1.0.0", 
-        "model": "Real Egg Detector (OpenCV)"
+        "model": "YOLO (ultralytics)"
     }
 
 @app.get("/health")
@@ -153,16 +205,16 @@ async def health_check():
     return {
         "status": "healthy", 
         "timestamp": datetime.now().isoformat(), 
-        "model": "Real Egg Detector",
-        "detector_ready": egg_detector is not None
+        "model": "YOLO (ultralytics)",
+        "detector_ready": yolo_model is not None
     }
 
 @app.post("/detect")
 async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
-    """Real egg detection endpoint"""
+    """YOLO egg detection endpoint"""
     try:
-        if egg_detector is None:
-            raise HTTPException(status_code=503, detail="Egg detector not initialized")
+        if yolo_model is None:
+            raise HTTPException(status_code=503, detail="YOLO model not initialized")
         
         # Read uploaded file
         contents = await file.read()
@@ -174,28 +226,87 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Use real egg detector
-        results = egg_detector.detect_eggs(image)
-        
+        np_img = np.array(image)
+        bgr_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+
+        image_area = float(image.width * image.height)
+
+        result = yolo_model(bgr_img)[0]
+
+        detections_list = []
+        confidences = []
+
+        grade_counts = {
+            "grade0_count": 0,
+            "grade1_count": 0,
+            "grade2_count": 0,
+            "grade3_count": 0,
+            "grade4_count": 0,
+            "grade5_count": 0,
+        }
+
+        for i, box in enumerate(result.boxes):
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            conf = _safe_float(box.conf[0])
+            cls_id = int(box.cls[0]) if hasattr(box, "cls") else -1
+            class_name = ""
+            try:
+                class_name = str(result.names.get(cls_id, ""))
+            except Exception:
+                class_name = ""
+
+            w = max(0.0, _safe_float(x2) - _safe_float(x1))
+            h = max(0.0, _safe_float(y2) - _safe_float(y1))
+            bbox_area = w * h
+
+            grade = _grade_from_class_name(class_name) or _grade_from_bbox_ratio(bbox_area, image_area)
+
+            confidences.append(conf)
+            grade_key = f"{grade}_count"
+            if grade_key in grade_counts:
+                grade_counts[grade_key] += 1
+            detections_list.append({
+                "id": i + 1,
+                "grade": grade,
+                "confidence": round(conf, 2),
+                "bbox": {
+                    "x1": _safe_float(x1),
+                    "y1": _safe_float(y1),
+                    "x2": _safe_float(x2),
+                    "y2": _safe_float(y2),
+                    "width": w,
+                    "height": h,
+                    "area": bbox_area,
+                },
+            })
+
+        total_eggs = len(detections_list)
+        avg_conf = (sum(confidences) / len(confidences)) if confidences else 0.0
+        success_percent = round(avg_conf * 100.0, 1)
+
         # Prepare response
+        saved_path = f"uploads/{uuid.uuid4()}.jpg"
+
         detection_results = {
             "session_id": str(uuid.uuid4()),
-            "detection_results": {
-                "grade0_count": results["grade_counts"]["grade0_count"],
-                "grade1_count": results["grade_counts"]["grade1_count"],
-                "grade2_count": results["grade_counts"]["grade2_count"],
-                "grade3_count": results["grade_counts"]["grade3_count"],
-                "grade4_count": results["grade_counts"]["grade4_count"],
-                "grade5_count": results["grade_counts"]["grade5_count"],
-                "total_eggs": results["total_eggs"],
-                "success_percent": results["success_percent"]
+            "image_info": {
+                "saved_path": saved_path,
+                "filename": file.filename or "upload",
+                "format": "RGB",
             },
-            "detections": results["detections"],
-            "saved_path": f"uploads/{uuid.uuid4()}.jpg",
-            "model_info": results.get("model_info", {
-                "type": "Real Egg Detector",
-                "method": "OpenCV Edge Detection + Contour Analysis"
-            })
+            "detection_results": {
+                **grade_counts,
+                "total_eggs": total_eggs,
+                "success_percent": success_percent,
+                "detections": detections_list,
+            },
+            "detections": detections_list,
+            "saved_path": saved_path,
+            "model_info": {
+                "type": "YOLO",
+                "framework": "ultralytics",
+                "weights": "yolov8n.pt",
+            },
         }
         
         payload = {
@@ -210,7 +321,7 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
             "grade4_count": detection_results["detection_results"]["grade4_count"],
             "grade5_count": detection_results["detection_results"]["grade5_count"],
             "day": datetime.now().strftime("%Y-%m-%d"),
-            # created_at ไม่ส่ง — ให้ Supabase ใช้ DEFAULT NOW()
+            "created_at": datetime.now().isoformat()  # Add created_at for SQLite
         }
 
         sqlite_session_id = save_to_sqlite(payload)
@@ -233,34 +344,11 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
 async def model_info():
     """Get model information"""
     return {
-        "model": "Real Egg Detector",
+        "model": "YOLO (ultralytics)",
         "version": "1.0.0",
-        "method": "OpenCV Edge Detection + Contour Analysis + Thai Egg Grading",
-        "features": [
-            "Canny Edge Detection",
-            "Sobel Edge Detection", 
-            "Contour Analysis",
-            "Shape Filtering",
-            "Size Classification",
-            "Thai TIS 227-2524 Standards"
-        ],
-        "grade_thresholds": {
-            "grade0": "เบอร์ 0 (พิเศษ) - ใหญ่พิเศษ > 70g",
-            "grade1": "เบอร์ 1 (ใหญ่) - 60-70g",
-            "grade2": "เบอร์ 2 (กลาง) - 50-60g", 
-            "grade3": "เบอร์ 3 (เล็ก) - 40-50g",
-            "grade4": "เบอร์ 4 (เล็กมาก) - 30-40g",
-            "grade5": "เบอร์ 5 (พิเศษเล็ก) - < 30g"
-        },
-        "advantages": [
-            "ตรวจจับวัตถุจริงๆ ด้วย edge detection",
-            "ไม่ต้องการ AI libraries ใหญ่ๆ",
-            "ขนาดเล็กกว่ามาก",
-            "เร็วและมีประสิทธิภาพ",
-            "ควบคุมได้ ปรับแต่งง่าย",
-            "ทำงานบน CPU ได้ดี",
-            "ใช้มาตรฐานไข่ไทย"
-        ]
+        "method": "Ultralytics YOLO inference (YOLO_MODEL_PATH or backend/yolov8n.pt or yolov8n.pt)",
+        "grade_mapping": "Prefer class-name mapping (grade0-5 / No.0-5 / egg_small-medium-large) then fallback to bbox_area/image_area heuristic",
+        "detector_ready": yolo_model is not None
     }
         
 if __name__ == "__main__":
