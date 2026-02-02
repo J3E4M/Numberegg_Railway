@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install OpenCV system deps only
 RUN apk add --no-cache \
-    libglib \
+    glib \
     libsm \
     libxext \
     libxrender \
