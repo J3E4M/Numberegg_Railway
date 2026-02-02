@@ -1,36 +1,33 @@
-# Ultra-minimal YOLO - < 300MB
-FROM python:3.11-alpine
+# ONNX YOLO - < 400MB
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install OpenCV system deps only
-RUN apk add --no-cache \
-    glib \
-    libsm \
-    libxext \
-    libxrender \
-    libgcc \
+# Install minimal system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Install Python packages (no OpenCV, use ultralytics built-in)
+# Install Python packages (ONNX only)
 RUN pip install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
-    ultralytics==8.0.196 \
-    numpy==1.24.4
+    onnxruntime==1.16.3 \
+    numpy==1.24.4 \
+    pillow==10.0.0
 
 # Copy app
 COPY railway_app_real.py .
 
-# Download YOLO weights
-RUN wget -O yolov8n.pt https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt
+# Download YOLO ONNX model (smaller than .pt)
+RUN wget -O yolov8n.onnx https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx
 
 # Create uploads
 RUN mkdir -p /app/uploads
 
-# Remove all cache
-RUN rm -rf /root/.cache/pip /root/.cache
+# Remove cache
+RUN rm -rf /root/.cache/pip
 
 EXPOSE 8000
 CMD ["python", "railway_app_real.py"]

@@ -20,7 +20,7 @@ import uuid
 import shutil
 from pathlib import Path
 from contextlib import asynccontextmanager
-from ultralytics import YOLO
+import onnxruntime as ort
 import numpy as np
 import cv2
 import re
@@ -28,17 +28,17 @@ import re
 # Import our real egg detector
 # from egg_detector_real import RealEggDetector
 
-def _load_yolo_model() -> YOLO:
+def _load_onnx_model() -> ort.InferenceSession:
     env_model_path = os.getenv("YOLO_MODEL_PATH", "").strip()
     candidates = [
         Path(env_model_path) if env_model_path else None,
-        Path("backend") / "yolov8n.pt",
-        Path("yolov8n.pt"),
+        Path("yolov8n.onnx"),
+        Path("backend") / "yolov8n.onnx",
     ]
     for candidate in candidates:
         if candidate and candidate.exists():
-            return YOLO(str(candidate))
-    raise RuntimeError("YOLO model file not found. Set YOLO_MODEL_PATH or provide yolov8n.pt")
+            return ort.InferenceSession(str(candidate), providers=['CPUExecutionProvider'])
+    raise RuntimeError("ONNX model file not found. Set YOLO_MODEL_PATH or provide yolov8n.onnx")
 
 def _safe_float(value) -> float:
     try:
@@ -80,11 +80,11 @@ def _grade_from_bbox_ratio(bbox_area: float, image_area: float) -> str:
 async def lifespan(app: FastAPI):
     # Startup
     try:
-        global yolo_model
-        yolo_model = _load_yolo_model()
+        global onnx_model
+        onnx_model = _load_onnx_model()
         init_sqlite()
         init_supabase()
-        print("✅ YOLO model initialized successfully")
+        print("✅ ONNX model initialized successfully")
         print("✅ SQLite initialized successfully")
         print("✅ Supabase connected successfully")
     except Exception as e:
@@ -205,16 +205,16 @@ async def health_check():
     return {
         "status": "healthy", 
         "timestamp": datetime.now().isoformat(), 
-        "model": "YOLO (ultralytics)",
-        "detector_ready": yolo_model is not None
+        "model": "YOLO (ONNX)",
+        "detector_ready": onnx_model is not None
     }
 
 @app.post("/detect")
 async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
     """YOLO egg detection endpoint"""
     try:
-        if yolo_model is None:
-            raise HTTPException(status_code=503, detail="YOLO model not initialized")
+        if onnx_model is None:
+            raise HTTPException(status_code=503, detail="ONNX model not initialized")
         
         # Read uploaded file
         contents = await file.read()
@@ -231,11 +231,25 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
 
         image_area = float(image.width * image.height)
 
-        result = yolo_model(bgr_img)[0]
-
+        # ONNX inference
+        input_name = onnx_model.get_inputs()[0].name
+        input_shape = onnx_model.get_inputs()[0].shape
+        model_height, model_width = input_shape[2], input_shape[3]
+        
+        # Preprocess image
+        img_resized = cv2.resize(bgr_img, (model_width, model_height))
+        img_input = img_resized.transpose(2, 0, 1).astype(np.float32) / 255.0
+        img_input = np.expand_dims(img_input, axis=0)
+        
+        # Run inference
+        outputs = onnx_model.run(None, {input_name: img_input})
+        
+        # YOLOv8 output format: [batch, 84, anchors] where 84 = 4(bbox) + 80(classes)
+        output = outputs[0][0]
+        
+        # Filter detections with confidence > 0.5
         detections_list = []
         confidences = []
-
         grade_counts = {
             "grade0_count": 0,
             "grade1_count": 0,
@@ -244,41 +258,43 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
             "grade4_count": 0,
             "grade5_count": 0,
         }
-
-        for i, box in enumerate(result.boxes):
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = _safe_float(box.conf[0])
-            cls_id = int(box.cls[0]) if hasattr(box, "cls") else -1
-            class_name = ""
-            try:
-                class_name = str(result.names.get(cls_id, ""))
-            except Exception:
-                class_name = ""
-
-            w = max(0.0, _safe_float(x2) - _safe_float(x1))
-            h = max(0.0, _safe_float(y2) - _safe_float(y1))
-            bbox_area = w * h
-
-            grade = _grade_from_class_name(class_name) or _grade_from_bbox_ratio(bbox_area, image_area)
-
-            confidences.append(conf)
-            grade_key = f"{grade}_count"
-            if grade_key in grade_counts:
-                grade_counts[grade_key] += 1
-            detections_list.append({
-                "id": i + 1,
-                "grade": grade,
-                "confidence": round(conf, 2),
-                "bbox": {
-                    "x1": _safe_float(x1),
-                    "y1": _safe_float(y1),
-                    "x2": _safe_float(x2),
-                    "y2": _safe_float(y2),
-                    "width": w,
-                    "height": h,
-                    "area": bbox_area,
-                },
-            })
+        
+        for i in range(len(output)):
+            detection = output[i]
+            confidence = float(detection[4])  # Objectness score
+            
+            if confidence > 0.5:
+                # Get bbox coordinates (center_x, center_y, width, height)
+                cx, cy, w, h = detection[0:4]
+                
+                # Convert to x1, y1, x2, y2 and scale to original image
+                x1 = int((cx - w/2) * image.width / model_width)
+                y1 = int((cy - h/2) * image.height / model_height)
+                x2 = int((cx + w/2) * image.width / model_width)
+                y2 = int((cy + h/2) * image.height / model_height)
+                
+                # Clamp to image bounds
+                x1 = max(0, min(x1, image.width))
+                y1 = max(0, min(y1, image.height))
+                x2 = max(0, min(x2, image.width))
+                y2 = max(0, min(y2, image.height))
+                
+                bbox_area = max(0, (x2 - x1) * (y2 - y1))
+                
+                # Use class 0 (egg) for all detections
+                class_name = "egg"
+                grade = _grade_from_bbox_ratio(bbox_area, image_area)
+                
+                detections_list.append({
+                    "class": class_name,
+                    "confidence": confidence,
+                    "bbox": [x1, y1, x2, y2],
+                    "grade": grade,
+                    "area": bbox_area
+                })
+                
+                confidences.append(confidence)
+                grade_counts[f"{grade}_count"] += 1
 
         total_eggs = len(detections_list)
         avg_conf = (sum(confidences) / len(confidences)) if confidences else 0.0
@@ -304,8 +320,8 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
             "saved_path": saved_path,
             "model_info": {
                 "type": "YOLO",
-                "framework": "ultralytics",
-                "weights": "yolov8n.pt",
+                "framework": "ONNX",
+                "weights": "yolov8n.onnx",
             },
         }
         
@@ -344,11 +360,11 @@ async def detect_eggs(file: UploadFile = File(...), user_id: int = 1):
 async def model_info():
     """Get model information"""
     return {
-        "model": "YOLO (ultralytics)",
+        "model": "YOLO (ONNX)",
         "version": "1.0.0",
-        "method": "Ultralytics YOLO inference (YOLO_MODEL_PATH or backend/yolov8n.pt or yolov8n.pt)",
-        "grade_mapping": "Prefer class-name mapping (grade0-5 / No.0-5 / egg_small-medium-large) then fallback to bbox_area/image_area heuristic",
-        "detector_ready": yolo_model is not None
+        "method": "ONNX Runtime inference (YOLO_MODEL_PATH or yolov8n.onnx)",
+        "grade_mapping": "Using bbox_area/image_area heuristic for grade0-5 classification",
+        "detector_ready": onnx_model is not None
     }
         
 if __name__ == "__main__":
