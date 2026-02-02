@@ -1,22 +1,22 @@
-FROM python:3.9-slim
+# Ultra minimal - no AI, just API
+FROM python:3.9-alpine
 
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY railway_requirements_fixed.txt requirements.txt
+# Install minimal dependencies
+RUN apk add --no-cache wget curl
 
-# Install dependencies
+# Copy requirements (minimal)
+COPY railway_requirements_minimal.txt requirements.txt
+
+# Install Python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY railway_app.py .
+# Copy app
+COPY railway_app_simple.py .
 
-# Expose port
+# Create uploads
+RUN mkdir -p /app/uploads
+
 EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
-
-# Run the application
-CMD ["python", "railway_app.py"]
+CMD ["python", "railway_app_simple.py"]
