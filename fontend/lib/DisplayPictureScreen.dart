@@ -114,9 +114,12 @@ class _DisplayPictureScreenState extends State<DisplayPictureScreen> {
         for (final detection in widget.detections!) {
           if (detection.confidence < 0.3) continue; // กรอง confidence ต่ำ
           
+          // ตรวจสอบว่า grade ไม่เป็น null
+          if (detection.grade == null) continue;
+          
           // แปลง grade string เป็นตัวเลข (NEW SYSTEM - grade0-5 เท่านั้น)
           int grade;
-          switch (detection.grade.toLowerCase()) {
+          switch (detection.grade!.toLowerCase()) {
             // New system (จาก Railway ใหม่)
             case 'grade0':
               grade = 0;  // เบอร์ 0 (พิเศษ)
