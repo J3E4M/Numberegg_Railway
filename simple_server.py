@@ -36,34 +36,66 @@ async def detect_get():
 
 # Download model at runtime if not exists
 MODEL_PATH = "yolov8n.pt"
-MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt"
+MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt"
 
 def download_model():
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            if not os.path.exists(MODEL_PATH):
-                print(f"Downloading YOLOv8 model (attempt {attempt + 1}/{max_retries})...")
-                urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-                print("Model downloaded successfully!")
+            print(f"=== Attempt {attempt + 1}/{max_retries} ===")
             
-            # Try to load the model
+            # Check current directory and files
+            print(f"Current directory: {os.getcwd()}")
+            print(f"Files in current directory: {os.listdir('.')}")
+            print(f"Model file exists: {os.path.exists(MODEL_PATH)}")
+            
+            # Download model if not exists
+            if not os.path.exists(MODEL_PATH):
+                print(f"Downloading YOLO model from {MODEL_URL}...")
+                import requests
+                response = requests.get(MODEL_URL, stream=True, timeout=30)
+                response.raise_for_status()
+                
+                with open(MODEL_PATH, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                print(f"Model downloaded. Size: {os.path.getsize(MODEL_PATH)} bytes")
+            else:
+                print(f"Model already exists. Size: {os.path.getsize(MODEL_PATH)} bytes")
+            
+            # Try to load model
             print("Loading YOLO model...")
             model = YOLO(MODEL_PATH)
-            print("Model loaded successfully!")
+            print("✅ Model loaded successfully!")
             return model
             
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
+            print(f"❌ Attempt {attempt + 1} failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Clean up corrupted file
+            if os.path.exists(MODEL_PATH):
+                try:
+                    os.remove(MODEL_PATH)
+                    print("Removed corrupted model file")
+                except:
+                    pass
+            
             if attempt == max_retries - 1:
-                print("All attempts failed. Model not available.")
+                print("❌ All attempts failed. Model not available.")
                 return None
             continue
     
     return None
 
 # Load model on startup
+print("🚀 Starting server and loading model...")
 model = download_model()
+if model:
+    print("✅ Server ready with YOLO model")
+else:
+    print("❌ Server started but YOLO model not available")
 
 CLASS_NAMES = {
     0: "egg",
