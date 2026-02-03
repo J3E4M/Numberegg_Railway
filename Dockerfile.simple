@@ -58,7 +58,6 @@ COPY --from=builder /root/.local /root/.local
 
 # Copy only essential application files (excluding models via .dockerignore)
 COPY simple_server.py .
-COPY database.py .
 
 # Create necessary directories
 RUN mkdir -p /app/uploads
