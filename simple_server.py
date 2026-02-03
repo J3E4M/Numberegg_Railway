@@ -99,9 +99,33 @@ if model:
 else:
     print("❌ Server started but YOLO model not available")
 
+# Egg classification based on confidence and size
+def classify_egg(x1, y1, x2, y2, confidence):
+    width = x2 - x1
+    height = y2 - y1
+    
+    # Grade based on confidence and size (pixels)
+    if confidence > 0.8:
+        if width > 80 or height > 80:
+            return 0  # Grade 0 (Extra Large)
+        elif width > 60 or height > 60:
+            return 1  # Grade 1 (Large)
+        elif width > 40 or height > 40:
+            return 2  # Grade 2 (Medium)
+        else:
+            return 3  # Grade 3 (Small)
+    elif confidence > 0.5:
+        return 4  # Grade 4 (Medium Small)
+    else:
+        return 5  # Grade 5 (Small/Poor)
+
 CLASS_NAMES = {
-    0: "egg",
-    1: "broken_egg",  # ถ้ามี
+    0: "egg_grade_0",  # Extra Large
+    1: "egg_grade_1",  # Large  
+    2: "egg_grade_2",  # Medium
+    3: "egg_grade_3",  # Small
+    4: "egg_grade_4",  # Medium Small
+    5: "egg_grade_5",  # Small/Poor
 }
 
 @app.post("/detect")
@@ -167,7 +191,9 @@ async def detect(file: UploadFile = File(...)):
         for box in results.boxes:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             confidence = float(box.conf[0])
-            class_id = int(box.cls[0])
+            
+            # Classify egg based on confidence and size
+            egg_grade = classify_egg(x1, y1, x2, y2, confidence)
             
             detections.append({
                 "x1": x1,
@@ -177,8 +203,8 @@ async def detect(file: UploadFile = File(...)):
                 "width_px": x2 - x1,
                 "height_px": y2 - y1,
                 "confidence": confidence,
-                "class_id": class_id,
-                "class_name": CLASS_NAMES.get(class_id, "unknown")
+                "class_id": egg_grade,  # Use egg grade instead of YOLO class
+                "class_name": CLASS_NAMES.get(egg_grade, "unknown")
             })
         
         print(f"✅ Found {len(detections)} detections")
