@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender-dev \
     libgthread-2.0-0 \
-    libgl1-mesa-glx \
     curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean \
