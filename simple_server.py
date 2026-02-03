@@ -119,22 +119,35 @@ async def detect(file: UploadFile = File(...)):
     
     try:
         image_bytes = await file.read()
-        np_img = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+        print(f"Received image: {len(image_bytes)} bytes")
+        
+        # Convert bytes to numpy array properly
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        print(f"Created numpy array: {nparr.shape}, dtype: {nparr.dtype}")
+        
+        # Decode image
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if img is None:
+            print("❌ Failed to decode image - invalid format")
             return {
                 "count": 0,
                 "detections": [],
-                "error": "Invalid image format"
+                "error": "Invalid image format - could not decode"
             }
-
+        
+        print(f"✅ Image decoded successfully: {img.shape}")
+        
+        # Run YOLO detection
         results = model(img)[0]
+        print(f"✅ YOLO inference completed")
 
         detections = []
         for box in results.boxes:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
-
+            confidence = float(box.conf[0])
+            class_id = int(box.cls[0])
+            
             detections.append({
                 "x1": x1,
                 "y1": y1,
@@ -142,11 +155,12 @@ async def detect(file: UploadFile = File(...)):
                 "y2": y2,
                 "width_px": x2 - x1,
                 "height_px": y2 - y1,
-                "confidence": float(box.conf[0]),
-                "class_id": int(box.cls[0]),
-                "class_name": CLASS_NAMES.get(int(box.cls[0]), "unknown")
+                "confidence": confidence,
+                "class_id": class_id,
+                "class_name": CLASS_NAMES.get(class_id, "unknown")
             })
-
+        
+        print(f"✅ Found {len(detections)} detections")
         return {
             "count": len(detections),
             "detections": detections
