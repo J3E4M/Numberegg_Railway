@@ -1,4 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -8,6 +10,11 @@ import urllib.request
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Pydantic model for login request
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 # เพิ่ม CORS middleware เพื่อรองรับการเรียกจาก mobile app
 app.add_middleware(
@@ -77,3 +84,20 @@ async def detect(file: UploadFile = File(...)):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.post("/login")
+async def login(request: LoginRequest):
+    # Simple mock login - accept test02@gmail.com with any password
+    if request.email == "test02@gmail.com":
+        return {
+            "id": 1,
+            "email": request.email,
+            "name": "Test User",
+            "privilege": "User",
+            "message": "Login successful"
+        }
+    else:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid credentials"}
+        )

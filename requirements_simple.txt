@@ -3,3 +3,4 @@ uvicorn
 ultralytics
 opencv-python
 numpy
+pydantic
