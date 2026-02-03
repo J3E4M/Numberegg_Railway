@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1. ✅ System Dependencies (แก้ไข: เพิ่ม libgl1 แก้ปัญหา libGL.so.1 missing)
+# 1. ✅ System Dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libglib2.0-0 \
@@ -20,19 +20,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /tmp/* \
     && rm -rf /var/tmp/*
 
-# 2. ✅ [จุดสำคัญที่สุด] ลง PyTorch แบบ CPU-Only ก่อน!
-# วิธีนี้จะลดขนาดจาก 5-6GB เหลือหลักร้อย MB 
+# 2. ✅ ลง PyTorch CPU
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# 3. ติดตั้ง Libraries อื่นๆ (Ultralytics จะเห็นว่ามี Torch แล้ว และจะไม่โหลดตัว GPU มาทับ)
+# 3. ✅ [แก้ตรงนี้] ติดตั้ง Libraries แบบบังคับ Version
+# 3.1 ลง Ultralytics และอื่นๆ ไปก่อน (มันจะแอบลง opencv ตัวใหม่มา)
 RUN pip install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
     ultralytics \
-    numpy==1.24.4 \
     pillow==10.0.0 \
-    opencv-python-headless==4.8.1.78 \
     python-multipart==0.0.6
+
+# 3.2 🔨 ไม้แข็ง: ลบ opencv ที่ติดมาทิ้ง แล้วลงตัว Headless 4.8.1 + Numpy เก่า
+RUN pip uninstall -y opencv-python opencv-python-headless || true \
+    && pip install --no-cache-dir "numpy<2.0" opencv-python-headless==4.8.1.78
 
 # 4. Download Model
 RUN curl -L -o yolov8n.pt https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt
@@ -40,16 +42,16 @@ RUN curl -L -o yolov8n.pt https://github.com/ultralytics/assets/releases/downloa
 # Copy application
 COPY simple_server.py .
 
-# Create uploads directory [cite: 3]
+# Create uploads directory
 RUN mkdir -p /app/uploads
 
-# Cleanup (ลบ cache อีกรอบเพื่อความชัวร์)
+# Cleanup
 RUN rm -rf /root/.cache/pip /tmp/* /var/tmp/*
 
 EXPOSE 8000
 
 # Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1 [cite: 4]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/ || exit 1
 
 CMD ["python", "simple_server.py"]
