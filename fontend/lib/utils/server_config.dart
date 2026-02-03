@@ -14,7 +14,7 @@ class ServerConfig {
   static const String _simpleServerUrl = 'http://localhost:8000'; // For simple_server.py
   
   // Environment selection
-  static const String _currentEnvironment = 'development'; // development, staging, production, simple, local_network
+  static const String _currentEnvironment = 'production'; // development, staging, production, simple, local_network
   
   /// ดึง URL สำหรับการตรวจจับ (Detection API)
   static Future<String> getDetectUrl() async {
