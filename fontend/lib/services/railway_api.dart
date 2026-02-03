@@ -5,7 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 class RailwayApiService {
-  static const String _baseUrl = 'https://numberegg-railway-production.up.railway.app'; // Railway deployment URL
+  static const String _baseUrl = 'https://numbereggrailway-production.up.railway.app'; // Railway deployment URL
   
   static final Dio _dio = Dio(BaseOptions(
     baseUrl: _baseUrl,
