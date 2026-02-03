@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import os
 import urllib.request
+import uvicorn # ✅ Import uvicorn ตรงนี้เลย
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -35,7 +36,8 @@ async def detect_get():
 
 # Download model at runtime if not exists
 MODEL_PATH = "yolov8n.pt"
-MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt"
+# ✅ แก้ไข URL ให้ถูกต้อง (v8.0.0 แทน v0.0.0)
+MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt"
 
 def download_model():
     if not os.path.exists(MODEL_PATH):
@@ -99,26 +101,17 @@ async def detect(file: UploadFile = File(...)):
 
     return {
         "count": len(detections),
-        "detections": detections  # เปลี่ยนจาก "eggs" เป็น "detections" เพื่อให้ตรงกับ Flutter app
+        "detections": detections
     }
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
-@app.post("/login")
-async def login(request: LoginRequest):
-    # Simple mock login - accept test02@gmail.com with any password
-    if request.email == "test02@gmail.com":
-        return {
-            "id": 1,
-            "email": request.email,
-            "name": "Test User",
-            "privilege": "User",
-            "message": "Login successful"
-        }
-    else:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Invalid credentials"}
-        )
+
+
+# ✅✅✅ ส่วนที่เพิ่มเข้ามาใหม่ (สำคัญที่สุด!) ✅✅✅
+if __name__ == "__main__":
+    # สั่งรัน Server ที่ 0.0.0.0 เพื่อให้ Docker/Railway เข้าถึงได้
+    print("Starting server on 0.0.0.0:8000...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
