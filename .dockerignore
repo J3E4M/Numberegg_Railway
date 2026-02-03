@@ -17,21 +17,28 @@ frontend
 Dockerfile*
 docker-compose*
 .dockerignore
-.git
-.gitignore
-README.md
-*.md
-__pycache__
-.pytest_cache
-.coverage
-.tox
-.vscode
-.idea
-node_modules
-frontend
-*.log
-.env.local
-.env.development
-Dockerfile*
-docker-compose*
-.dockerignore
+
+# Exclude large model files - download at runtime instead
+*.pt
+*.pth
+*.onnx
+*.weights
+
+# Exclude development and test files
+test_*
+*_test.py
+tests/
+.pytest_cache/
+
+# Exclude database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Exclude upload directories
+uploads/
+backend/runs/
+
+# Exclude documentation
+docs/
+*.rst

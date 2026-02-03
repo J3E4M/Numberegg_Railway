@@ -2,6 +2,8 @@ from fastapi import FastAPI, UploadFile, File
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import os
+import urllib.request
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,7 +26,19 @@ async def options_handler(path: str):
 async def detect_get():
     return {"status": "ok"}
 
-model = YOLO("yolov8n.pt")  # หรือ model ไข่ของคุณ
+# Download model at runtime if not exists
+MODEL_PATH = "yolov8n.pt"
+MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt"
+
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        print(f"Downloading YOLOv8 model from {MODEL_URL}...")
+        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+        print("Model downloaded successfully!")
+
+# Download model on startup
+download_model()
+model = YOLO(MODEL_PATH)
 
 CLASS_NAMES = {
     0: "egg",
@@ -59,3 +73,7 @@ async def detect(file: UploadFile = File(...)):
         "count": len(detections),
         "detections": detections  # เปลี่ยนจาก "eggs" เป็น "detections" เพื่อให้ตรงกับ Flutter app
     }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}

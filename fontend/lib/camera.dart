@@ -306,53 +306,111 @@ class DisplayPictureScreen extends StatelessWidget {
     const double cmPerPixel = 0.02; // 🔧 ต้องตรงกับ Painter
     print("START SAVE");
     
-    // First, create a session
-    final sessionId = await EggDatabase.instance.insertSession(
-      userId: 1, // You might want to get this from user authentication
-      imagePath: "picked_image.jpg", // หรือส่งชื่อจริงมา
-      eggCount: detections.where((d) => d.cls == 0).length,
-      successPercent: 100.0, // You might want to calculate this based on confidence
-      day: DateTime.now().toIso8601String().substring(0, 10),
-    );
+    try {
+      // 🗄️ STEP 1: บันทึกลง SQLite ก่อน (Offline First)
+      print("🗄️ Saving to SQLite first...");
+      
+      final sessionId = await EggDatabase.instance.insertSession(
+        userId: 1, // You might want to get this from user authentication
+        imagePath: "picked_image.jpg", // หรือส่งชื่อจริงมา
+        eggCount: detections.where((d) => d.cls == 0).length,
+        successPercent: 100.0, // You might want to calculate this based on confidence
+        day: DateTime.now().toIso8601String().substring(0, 10),
+      );
 
-    // Then insert each egg item
-    for (final d in detections) {
-      // ✅ บันทึกเฉพาะไข่
-      if (d.cls != 0) continue;
+      // Then insert each egg item
+      for (final d in detections) {
+        // ✅ บันทึกเฉพาะไข่
+        if (d.cls != 0) continue;
 
-      final widthCm = (d.x2 - d.x1) * cmPerPixel;
-      final heightCm = (d.y2 - d.y1) * cmPerPixel;
+        final widthCm = (d.x2 - d.x1) * cmPerPixel;
+        final heightCm = (d.y2 - d.y1) * cmPerPixel;
 
-      // 🥚 ตัวอย่างเกรด (คุณปรับทีหลังได้)
-      int grade;
-      if (widthCm >= 6.0) {
-        grade = 3;
-      } else if (widthCm >= 5.0) {
-        grade = 2;
-      } else if (widthCm >= 4.0) {
-        grade = 1;
-      } else {
-        grade = 0;
+        // 🥚 ตัวอย่างเกรด (คุณปรับทีหลังได้)
+        int grade;
+        if (widthCm >= 6.0) {
+          grade = 3;
+        } else if (widthCm >= 5.0) {
+          grade = 2;
+        } else if (widthCm >= 4.0) {
+          grade = 1;
+        } else {
+          grade = 0;
+        }
+
+        await EggDatabase.instance.insertEggItem(
+          sessionId: sessionId,
+          grade: grade,
+          confidence: d.confidence,
+          x1: d.x1,
+          y1: d.y1,
+          x2: d.x2,
+          y2: d.y2,
+        );
       }
-
-      await EggDatabase.instance.insertEggItem(
-        sessionId: sessionId,
-        grade: grade,
-        confidence: d.confidence,
-        x1: d.x1,
-        y1: d.y1,
-        x2: d.x2,
-        y2: d.y2,
-      );
+      
+      print("✅ SQLite save successful: Session $sessionId");
+      
+      // ☁️ STEP 2: Sync ไป Supabase (Background)
+      print("☁️ Syncing to Supabase...");
+      _syncToSupabase(sessionId);
+      
+      if (context.mounted) {
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          const SnackBar(
+            content: Text("บันทึกผลตรวจไข่เรียบร้อย (พร้อม sync ขึ้นคลาวด์)"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print("❌ Save failed: $e");
+      if (context.mounted) {
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text("บันทึกล้มเหลว: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-
-    if (context.mounted) {
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(
-          content: Text("บันทึกผลตรวจไข่เรียบร้อย"),
-          backgroundColor: Colors.green,
-        ),
+  }
+  
+  // ☁️ Background sync to Supabase
+  Future<void> _syncToSupabase(int localSessionId) async {
+    try {
+      // Get session data from SQLite
+      final db = await EggDatabase.instance.database;
+      final sessions = await db.query(
+        'egg_session',
+        where: 'id = ?',
+        whereArgs: [localSessionId],
       );
+      
+      if (sessions.isEmpty) {
+        print("❌ Session not found in SQLite");
+        return;
+      }
+      
+      final session = sessions.first;
+      
+      // Get egg items
+      final eggItems = await db.query(
+        'egg_item',
+        where: 'session_id = ?',
+        whereArgs: [localSessionId],
+      );
+      
+      // TODO: Sync to Supabase here
+      // You'll need to implement Supabase sync logic
+      print("📤 Ready to sync session ${session['id']} with ${eggItems.length} egg items to Supabase");
+      
+      // For now, just log the data
+      print("📊 Session data: ${session}");
+      print("🥚 Egg items count: ${eggItems.length}");
+      
+    } catch (e) {
+      print("❌ Supabase sync failed: $e");
     }
   }
 }

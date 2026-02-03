@@ -56,9 +56,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy only installed packages from builder
 COPY --from=builder /root/.local /root/.local
 
-# Copy only essential application files
+# Copy only essential application files (excluding models via .dockerignore)
 COPY simple_server.py .
-COPY egg_detector_real.py .
 COPY database.py .
 
 # Create necessary directories
