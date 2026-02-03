@@ -20,23 +20,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /tmp/* \
     && rm -rf /var/tmp/*
 
-# 2. ✅ ลง PyTorch CPU
-RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-
-# 3. ✅ [แก้ตรงนี้] ติดตั้ง Libraries แบบบังคับ Version
-# 3.1 ลง Ultralytics และอื่นๆ ไปก่อน (มันจะแอบลง opencv ตัวใหม่มา)
-RUN pip install --no-cache-dir \
+# 2. ✅ Install Dependencies (รวบยอดใน Step เดียว เพื่อกัน Version ตีกัน)
+# - ลง torch cpu ก่อนเพื่อความเบา
+# - ลง numpy<2.0 และ opencv-headless พร้อมกับ ultralytics เลย
+# - pip จะได้เลือก version ของ ultralytics ที่เข้ากันได้กับ numpy<2.0 ให้เองอัตโนมัติ
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir \
+    "numpy<2.0" \
+    "opencv-python-headless>=4.8,<4.9" \
+    ultralytics \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
-    ultralytics \
     pillow==10.0.0 \
     python-multipart==0.0.6
 
-# 3.2 🔨 ไม้แข็ง: ลบ opencv ที่ติดมาทิ้ง แล้วลงตัว Headless 4.8.1 + Numpy เก่า
-RUN pip uninstall -y opencv-python opencv-python-headless || true \
-    && pip install --no-cache-dir "numpy<2.0" opencv-python-headless==4.8.1.78
-
-# 4. Download Model
+# 3. Download Model
 RUN curl -L -o yolov8n.pt https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt
 
 # Copy application
