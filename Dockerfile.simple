@@ -57,10 +57,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /root/.local /root/.local
 
 # Copy only essential application files
-COPY railway_app_ultra_minimal.py .
+COPY simple_server.py .
 COPY egg_detector_real.py .
 COPY database.py .
-COPY simple_server.py .
 
 # Create necessary directories
 RUN mkdir -p /app/uploads
@@ -83,4 +82,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 USER root
 
 # Start application
-CMD ["python", "railway_app_ultra_minimal.py"]
+CMD ["python", "simple_server.py"]
