@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1. ✅ System Dependencies (เฉพาะที่ OpenCV จำเป็น)
+# 1. ✅ System Dependencies (แก้ไข: เพิ่ม libgl1 แก้ปัญหา libGL.so.1 missing)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libglib2.0-0 \
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender-dev \
     libgthread-2.0-0 \
+    libgl1 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean \
@@ -20,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/tmp/*
 
 # 2. ✅ [จุดสำคัญที่สุด] ลง PyTorch แบบ CPU-Only ก่อน!
-# วิธีนี้จะลดขนาดจาก 5-6GB เหลือหลักร้อย MB
+# วิธีนี้จะลดขนาดจาก 5-6GB เหลือหลักร้อย MB 
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # 3. ติดตั้ง Libraries อื่นๆ (Ultralytics จะเห็นว่ามี Torch แล้ว และจะไม่โหลดตัว GPU มาทับ)
@@ -39,7 +40,7 @@ RUN curl -L -o yolov8n.pt https://github.com/ultralytics/assets/releases/downloa
 # Copy application
 COPY simple_server.py .
 
-# Create uploads directory
+# Create uploads directory [cite: 3]
 RUN mkdir -p /app/uploads
 
 # Cleanup (ลบ cache อีกรอบเพื่อความชัวร์)
@@ -49,6 +50,6 @@ EXPOSE 8000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:8000/ || exit 1 [cite: 4]
 
 CMD ["python", "simple_server.py"]
