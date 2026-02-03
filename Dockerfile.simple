@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 # เพิ่มใน Dockerfile ก่อน CMD
-RUN curl -L -o yolov8n.pt https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt
+# RUN curl -L -o yolov8n.pt https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt
 # Install system dependencies (Keep these, required for OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
