@@ -7,14 +7,14 @@ class ServerConfig {
   static const String _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdieHh3b2psaWhncmJ0dGhtdXNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NTQ1MjYsImV4cCI6MjA3OTUzMDUyNn0.-XKw6NOhrWBxp4gLvQbPExLU2PHhUfUWdD3zsSc_9_k';
   
   // Detection API URLs
-  static const String _railwayUrl = 'https://numbereggrailway-production.up.railway.app'; // Railway URL (production) - เปลี่ยนตาม URL จริง
+  static const String _railwayUrl = 'https://numbereggrailway-production.up.railway.app'; // Railway URL (production)
   static const String _developmentUrl = 'http://localhost:8000'; // Local development
   static const String _stagingUrl = 'https://your-staging-server.com'; // Staging server
   static const String _localNetworkUrl = 'http://192.168.1.100:8000'; // Local network IP
   static const String _simpleServerUrl = 'http://localhost:8000'; // For simple_server.py
   
   // Environment selection
-  static const String _currentEnvironment = 'production'; // development, staging, production, simple, local_network
+  static const String _currentEnvironment = 'development'; // development, staging, production, simple, local_network
   
   /// ดึง URL สำหรับการตรวจจับ (Detection API)
   static Future<String> getDetectUrl() async {

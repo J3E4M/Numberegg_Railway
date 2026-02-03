@@ -1,48 +1,85 @@
-# Simple Railway Dockerfile for NumberEgg Detection API
-# Based on Python slim image for smaller size
-# Includes Supabase integration
+# Ultra-optimized multi-stage Dockerfile for Railway
+# Target: < 2GB final image size
 
-FROM python:3.9-slim
+# Stage 1: Builder with minimal build tools
+FROM python:3.11-slim as builder
 
-# Set working directory
+# Set environment variables for non-interactive installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+# Install minimal build dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy requirements first for better layer caching
+COPY requirements_ultra_minimal.txt requirements.txt
+
+# Install Python packages with optimizations
+RUN pip install --no-cache-dir --user --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir --user -r requirements.txt \
+    && find /root/.local -type d -name __pycache__ -exec rm -rf {} + \
+    && find /root/.local -type f -name "*.pyc" -delete
+
+# Stage 2: Final runtime image
+FROM python:3.11-slim
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PATH=/root/.local/bin:$PATH
+
+WORKDIR /app
+
+# Install only essential runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgomp1 \
     libgthread-2.0-0 \
-    wget \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
 
-# Copy requirements first for better caching
-COPY requirements_simple.txt .
+# Copy only installed packages from builder
+COPY --from=builder /root/.local /root/.local
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements_simple.txt
+# Copy only essential application files
+COPY railway_app_ultra_minimal.py .
+COPY egg_detector_real.py .
+COPY database.py .
 
-# Copy application code
-COPY simple_server.py .
-COPY yolov8n.pt .
+# Create necessary directories
+RUN mkdir -p /app/uploads
 
-# Create uploads directory
-RUN mkdir -p uploads
-
-# Create .env file for Railway
-RUN echo "SUPABASE_URL=${SUPABASE_URL}" > .env && \
-    echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" >> .env
+# Remove any remaining cache and temporary files
+RUN rm -rf /root/.cache \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/* \
+    && find /root/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true \
+    && find /root/.local -type f -name "*.pyc" -delete 2>/dev/null || true
 
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application
-CMD ["python", "simple_server.py"]
+# Set user to non-root for security
+USER root
+
+# Start application
+CMD ["python", "railway_app_ultra_minimal.py"]

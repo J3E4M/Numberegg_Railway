@@ -7,12 +7,12 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
-import 'database/egg_database.dart'; // ปรับ path ให้ตรงโปรเจกต์คุณ
+import 'database/egg_database.dart'; // 🔧 ปรับ path ให้ตรงโปรเจกต์คุณ
 import 'utils/server_config.dart';
 
 const List<String> yoloClasses = [
   "egg", // class 0
-  // เพิ่ม class อื่นๆ ได้
+  // เพิ่ม class อื่นได้
 ];
 
 /// ================== MODEL ==================
@@ -49,7 +49,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      scaffoldMessengerKey: scaffoldMessengerKey, // เพิ่ม
+      scaffoldMessengerKey: scaffoldMessengerKey, // ⭐ เพิ่ม
       debugShowCheckedModeBanner: false,
       home: SelectImageScreen(),
     );
@@ -67,13 +67,13 @@ class SelectImageScreen extends StatefulWidget {
 class _SelectImageScreenState extends State<SelectImageScreen> {
   bool isLoading = false;
 
-  /// ส่งรูปไปตรวจจับด้วย YOLO
+  /// 🔥 ส่งรูปไป YOLO
   Future<List<Detection>> sendToYolo(
     Uint8List bytes,
     String filename,
   ) async {
     try {
-      // ใช้ ServerConfig เพื่อดึง URL จาก configuration
+      // ใช้ ServerConfig เพื่อดึง URL จาก config
       final baseUrl = await ServerConfig.getApiUrl();
       final url = Uri.parse('$baseUrl/detect');
       
@@ -89,7 +89,7 @@ class _SelectImageScreenState extends State<SelectImageScreen> {
         ),
       );
 
-      // เพิ่ม headers สำหรับการ debug
+      // เพิ่ม headers สำหรับ debugging
       request.headers.addAll({
         'Accept': 'application/json',
         'User-Agent': 'NumberEgg-Flutter-App',
@@ -108,7 +108,7 @@ class _SelectImageScreenState extends State<SelectImageScreen> {
       
       final jsonData = jsonDecode(body);
       
-      // จัดการกับ response format ที่แตกต่างกันได้
+      // จัดการกับ response format ที่แตกต่างกัน
       List<dynamic> detectionsList;
       if (jsonData['detections'] != null) {
         detectionsList = jsonData['detections'] as List;
@@ -127,14 +127,14 @@ class _SelectImageScreenState extends State<SelectImageScreen> {
     }
   }
 
-  /// เลือกรูปจากเครื่อง
+  /// 📁 เลือกรูปจากเครื่อง
   Future<void> pickImage() async {
     try {
       setState(() => isLoading = true);
 
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
-        withData: true, // สำคัญมาก (Web ต้องใช้)
+        withData: true, // ⭐ สำคัญมาก (Web ต้องใช้)
       );
 
       if (result == null) return;
@@ -146,7 +146,7 @@ class _SelectImageScreenState extends State<SelectImageScreen> {
 
       if (!mounted) return;
 
-      // แสดงข้อมูลสำหรับการ debug
+      // แสดง debug info
       debugPrint('Found ${detections.length} detections');
       for (int i = 0; i < detections.length; i++) {
         final d = detections[i];
@@ -262,7 +262,7 @@ class DisplayPictureScreen extends StatelessWidget {
                           ),
                           painter: YoloPainter(
                             detections,
-                            imageSize, // ใช้ขนาดภาพจริง
+                            imageSize, // ✅ ใช้ขนาดภาพจริง
                           ),
                         ),
                       ],
@@ -272,7 +272,7 @@ class DisplayPictureScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                "พบวัตถุทั้งหมด: ${detections.length} ชิ้น",
+                "พบวัตถุทั้งหมด: ${detections.length}",
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -281,7 +281,7 @@ class DisplayPictureScreen extends StatelessWidget {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 icon: const Icon(Icons.save),
-                label: const Text("บันทึกผลการตรวจไข่"),
+                label: const Text("บันทึกผลตรวจไข่"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
@@ -303,13 +303,13 @@ class DisplayPictureScreen extends StatelessWidget {
   }
 
   Future<void> _saveToDatabase(BuildContext context) async {
-    const double cmPerPixel = 0.02; // ต้องตรงกับ YoloPainter
+    const double cmPerPixel = 0.02; // 🔧 ต้องตรงกับ Painter
     print("START SAVE");
     
     // First, create a session
     final sessionId = await EggDatabase.instance.insertSession(
       userId: 1, // You might want to get this from user authentication
-      imagePath: "picked_image.jpg", // หรือส่งชื่อไฟล์จริงมา
+      imagePath: "picked_image.jpg", // หรือส่งชื่อจริงมา
       eggCount: detections.where((d) => d.cls == 0).length,
       successPercent: 100.0, // You might want to calculate this based on confidence
       day: DateTime.now().toIso8601String().substring(0, 10),
@@ -317,13 +317,13 @@ class DisplayPictureScreen extends StatelessWidget {
 
     // Then insert each egg item
     for (final d in detections) {
-      // บันทึกเฉพาะการตรวจจับไข่
+      // ✅ บันทึกเฉพาะไข่
       if (d.cls != 0) continue;
 
       final widthCm = (d.x2 - d.x1) * cmPerPixel;
       final heightCm = (d.y2 - d.y1) * cmPerPixel;
 
-      // กำหนดเกรดไข่ (สามารถปรับแต่งได้)
+      // 🥚 ตัวอย่างเกรด (คุณปรับทีหลังได้)
       int grade;
       if (widthCm >= 6.0) {
         grade = 3;
@@ -349,7 +349,7 @@ class DisplayPictureScreen extends StatelessWidget {
     if (context.mounted) {
       scaffoldMessengerKey.currentState?.showSnackBar(
         const SnackBar(
-          content: Text("บันทึกผลการตรวจไข่เรียบร้อยแล้ว"),
+          content: Text("บันทึกผลตรวจไข่เรียบร้อย"),
           backgroundColor: Colors.green,
         ),
       );
@@ -360,8 +360,9 @@ class DisplayPictureScreen extends StatelessWidget {
 /// ================== YOLO PAINTER ==================
 class YoloPainter extends CustomPainter {
   final List<Detection> detections;
-  final Size imageSize; // ขนาดภาพ เช่น 640x640
+  final Size imageSize; // เช่น 640x640
 
+  // ⭐ เพิ่มตรงนี้
   final double cmPerPixel = 0.02; // ปรับตามการวัดจริง
 
   YoloPainter(this.detections, this.imageSize);
@@ -392,7 +393,7 @@ class YoloPainter extends CustomPainter {
 
       canvas.drawRect(rect, boxPaint);
 
-      // คำนวณขนาด
+      // 📐 คำนวณขนาด
       final widthPx = d.x2 - d.x1;
       final heightPx = d.y2 - d.y1;
 
@@ -420,7 +421,7 @@ class YoloPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
 
-      // วาด label เหนือกรอบ
+      // 📍 วาด label เหนือกรอบ
       final labelOffset = Offset(
         rect.left,
         rect.top - textPainter.height - 4,

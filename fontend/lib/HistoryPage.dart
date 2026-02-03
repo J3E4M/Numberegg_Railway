@@ -47,38 +47,7 @@ class _HistoryPageState extends State<HistoryPage> {
   void initState() {
     super.initState();
     debugPrint("INIT HISTORY PAGE");
-    _historyFuture = _getHistoryForUI();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh data when page becomes visible again
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _refreshHistory();
-      }
-    });
-  }
-
-  /// ดึงข้อมูลประวัติ พยายามจาก Supabase ก่อน ถ้าไม่ได้ใช้ SQLite
-  Future<List<Map<String, dynamic>>> _getHistoryForUI() async {
-    try {
-      debugPrint('🔄 Fetching history from Supabase...');
-      final supabaseData = await SupabaseService.getHistoryForUI();
-      debugPrint('✅ Got ${supabaseData.length} sessions from Supabase');
-      return supabaseData;
-    } catch (e) {
-      debugPrint('❌ Failed to get history from Supabase, falling back to SQLite: $e');
-      try {
-        final sqliteData = await EggDatabase.instance.getHistoryForUI();
-        debugPrint('✅ Got ${sqliteData.length} sessions from SQLite');
-        return sqliteData;
-      } catch (e2) {
-        debugPrint('❌ Failed to get history from SQLite too: $e2');
-        return [];
-      }
-    }
+    _historyFuture = EggDatabase.instance.getHistoryForUI();
   }
 
   // ฟังก์ชันช่วยเลือกสีตามขนาดไข่
@@ -217,7 +186,7 @@ class _HistoryPageState extends State<HistoryPage> {
       if (selectedFilter == 'เลือกวันที่') {
         _historyFuture = _getFilteredHistory();
       } else {
-        _historyFuture = _getHistoryForUI();
+        _historyFuture = EggDatabase.instance.getHistoryForUI();
       }
     });
   }
@@ -1234,19 +1203,6 @@ class _HistoryPageState extends State<HistoryPage> {
                   ),
                   Row(
                     children: [
-                      // Refresh button
-                      IconButton(
-                        onPressed: _refreshHistory,
-                        icon: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.refresh, color: Colors.blue.shade700),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       // Clear data button (เมนูเลือกวิธีลบ)
                       PopupMenuButton<String>(
                         icon: Container(
