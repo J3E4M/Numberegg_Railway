@@ -5,14 +5,20 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1. ✅ System Dependencies (รวม libraries ที่จำเป็นสำหรับ OpenCV และ curl)
+# 1. ✅ System Dependencies (เฉพาะที่ OpenCV จำเป็น)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    libgomp1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    libxrender-dev \
+    libgthread-2.0-0 \
+    libgl1-mesa-glx \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
 
 # 2. ✅ [จุดสำคัญที่สุด] ลง PyTorch แบบ CPU-Only ก่อน!
 # วิธีนี้จะลดขนาดจาก 5-6GB เหลือหลักร้อย MB
