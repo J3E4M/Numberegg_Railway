@@ -1,9 +1,9 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile.optimized"
+dockerfilePath = "Dockerfile.ultra_minimal"
 
 [deploy]
-startCommand = "python railway_app_yolo.py"
+startCommand = "python railway_app_ultra_minimal.py"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/health"
