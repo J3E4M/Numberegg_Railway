@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir \
 COPY simple_server.py .
 
 # ✅ Download pre-converted ONNX model
-RUN wget -q -O yolov8n.onnx https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.onnx
+RUN curl -L -o yolov8n.onnx https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.onnx
 
 # Create uploads directory
 RUN mkdir -p /app/uploads
